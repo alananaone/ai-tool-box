@@ -1,0 +1,108 @@
+{# templates/landing.html (新增「完整簡報生成」按鈕) #}
+{% extends "base.html" %}
+
+{% block title %}功能選單 - AI 工具箱{% endblock %}
+
+{% block head %}
+    {{ super() }}
+    <style>
+        .landing-title { font-weight: 400; margin-bottom: 2rem !important; color: #333; }
+        .landing-buttons a i { margin-right: 0.5rem; }
+
+        /* 音樂播放器樣式 (保持不變) */
+        .music-player-container-modern {
+            margin-top: 50px;
+            padding: 1rem 1.5rem;
+            background-color: rgba(250, 250, 250, 0.85);
+            border: 1px solid #e0e0e0;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        #song-title-modern { font-size: 0.95em; color: #555; font-weight: 500; margin-bottom: 0.75rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        #progress-bar { width: 100%; height: 5px; cursor: pointer; accent-color: #FF69B4; background: #ddd; border-radius: 5px; outline: none; opacity: 0.7; transition: opacity .2s; margin-bottom: 1rem; appearance: none; -webkit-appearance: none; }
+        #progress-bar:hover { opacity: 1; }
+        #progress-bar::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 15px; height: 15px; background: #C71585; border-radius: 50%; cursor: pointer; }
+        #progress-bar::-moz-range-thumb { width: 15px; height: 15px; background: #C71585; border-radius: 50%; cursor: pointer; border: none; }
+        .player-controls-modern { display: flex; align-items: center; justify-content: center; gap: 1.5rem; }
+        .player-controls-modern .btn { background: none; border: none; color: #666; padding: 0; line-height: 1; }
+        .player-controls-modern .btn:hover { color: #000; }
+        .player-controls-modern #play-pause-btn { font-size: 2.5rem; color: #C71585; }
+        .player-controls-modern #play-pause-btn:hover { color: #FF69B4; }
+        .player-controls-modern #prev-btn, .player-controls-modern #next-btn { font-size: 1.5rem; }
+    </style>
+{% endblock %}
+
+{% block content %}
+    <div class="text-center">
+        <h1 class="mb-5 fw-light landing-title">AI 工具箱</h1>
+
+        <div class="d-grid gap-3 col-lg-6 col-md-8 mx-auto landing-buttons">
+             <a href="{{ url_for('pdf_to_ppt') }}" class="btn btn-lg btn-custom-gradient btn-grad-1">
+                 <i class="bi bi-camera-reels"></i>生成簡報
+             </a>
+             <a href="{{ url_for('full_report') }}" class="btn btn-lg btn-custom-gradient btn-grad-special">
+                 <i class="bi bi-journal-album"></i>掃描處理
+             </a>
+             <a href="{{ url_for('ocr') }}" class="btn btn-lg btn-custom-gradient btn-grad-2">
+                  <i class="bi bi-textarea-t"></i>文字辨識
+             </a>
+             <a href="{{ url_for('summarize') }}" class="btn btn-lg btn-custom-gradient btn-grad-3">
+                  <i class="bi bi-card-checklist"></i>重點整理
+             </a>
+             <a href="{{ url_for('chat') }}" class="btn btn-lg btn-custom-gradient btn-grad-4">
+                  <i class="bi bi-chat-dots"></i>自由對話
+             </a>
+              <a href="{{ url_for('file_split') }}" class="btn btn-lg btn-custom-gradient btn-grad-5">
+                   <i class="bi bi-scissors"></i>檔案分割
+              </a>
+        </div>
+    </div>
+
+    <!-- 音樂播放器 HTML -->
+    <div class="music-player-container-modern col-lg-6 col-md-8 mx-auto text-center">
+        <div id="song-title-modern">歌曲名稱</div>
+        <input type="range" id="progress-bar" class="form-range" value="0" step="1">
+        <div class="player-controls-modern">
+            <button type="button" id="prev-btn" class="btn" title="上一首"><i class="bi bi-skip-start-fill"></i></button>
+            <button type="button" id="play-pause-btn" class="btn" title="播放/暫停"><i class="bi bi-play-circle-fill"></i></button>
+            <button type="button" id="next-btn" class="btn" title="下一首"><i class="bi bi-skip-end-fill"></i></button>
+        </div>
+    </div>
+    <audio id="background-audio"></audio>
+
+{% endblock %}
+
+{% block scripts %}
+    {{ super() }}
+    <script>
+        const audio = document.getElementById('background-audio');
+        const playPauseBtn = document.getElementById('play-pause-btn');
+        const prevBtn = document.getElementById('prev-btn');
+        const nextBtn = document.getElementById('next-btn');
+        const songTitleElement = document.getElementById('song-title-modern');
+        const progressBar = document.getElementById('progress-bar');
+        const playlist = [
+            { title: "只有小魚在乎", src: "{{ url_for('static', filename='audio/song1.mp3') }}" },
+            { title: "Winter blossom", src: "{{ url_for('static', filename='audio/song2.mp3') }}" }
+        ];
+        let currentTrackIndex = 0;
+        let isPlaying = false;
+        function loadTrack(trackIndex) { currentTrackIndex = (trackIndex + playlist.length) % playlist.length; audio.src = playlist[currentTrackIndex].src; songTitleElement.textContent = playlist[currentTrackIndex].title; progressBar.value = 0; }
+        function playTrack() { try { audio.play().then(() => { isPlaying = true; playPauseBtn.innerHTML = '<i class="bi bi-pause-circle-fill"></i>'; }).catch(error => { isPlaying = false; playPauseBtn.innerHTML = '<i class="bi bi-play-circle-fill"></i>'; }); } catch (error) { isPlaying = false; playPauseBtn.innerHTML = '<i class="bi bi-play-circle-fill"></i>'; } }
+        function pauseTrack() { audio.pause(); isPlaying = false; playPauseBtn.innerHTML = '<i class="bi bi-play-circle-fill"></i>'; }
+        function playPauseToggle() { if (isPlaying) { pauseTrack(); } else { if (!audio.src || audio.src !== playlist[currentTrackIndex].src) { loadTrack(currentTrackIndex); } playTrack(); } }
+        function prevTrack() { loadTrack(currentTrackIndex - 1); playTrack(); }
+        function nextTrack() { loadTrack(currentTrackIndex + 1); playTrack(); }
+        function updateProgress() { if (audio.duration) { const progressPercent = (audio.currentTime / audio.duration) * 100; progressBar.value = progressPercent; } }
+        function setProgress(e) { const newTime = (progressBar.value / 100) * audio.duration; if (!isNaN(newTime)) { audio.currentTime = newTime; } }
+        playPauseBtn.addEventListener('click', playPauseToggle);
+        prevBtn.addEventListener('click', prevTrack);
+        nextBtn.addEventListener('click', nextTrack);
+        audio.addEventListener('ended', nextTrack);
+        audio.addEventListener('play', () => { isPlaying = true; playPauseBtn.innerHTML = '<i class="bi bi-pause-circle-fill"></i>'; });
+        audio.addEventListener('pause', () => { isPlaying = false; playPauseBtn.innerHTML = '<i class="bi bi-play-circle-fill"></i>'; });
+        audio.addEventListener('timeupdate', updateProgress);
+        progressBar.addEventListener('input', setProgress);
+        loadTrack(currentTrackIndex);
+    </script>
+{% endblock %}

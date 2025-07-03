@@ -1,0 +1,9 @@
+Flask>=2.0
+google-generativeai
+python-docx
+PyMuPDF
+Pillow
+python-pptx
+Werkzeug>=2.0
+pywebview[qt]
+configparser

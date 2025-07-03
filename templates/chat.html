@@ -1,0 +1,77 @@
+{# templates/chat.html (自由對話版本) #}
+{% extends "base.html" %}
+
+{% block title %}自由對話{% endblock %} {#<-- 修改標題 #}
+
+{% block head %}
+    {{ super() }}
+    {# --- 樣式保持不變 --- #}
+    <style>
+        #chatbox { height: 60vh; overflow-y: auto; border: 1px solid #ddd; padding: 15px; margin-bottom: 15px; border-radius: 5px; background-color: #f8f9fa; }
+        .message { margin-bottom: 10px; padding: 8px 12px; border-radius: 10px; max-width: 80%; word-wrap: break-word; }
+        .user-message { background-color: #d1ecf1; color: #0c5460; margin-left: auto; border-bottom-right-radius: 0; }
+        .ai-message { background-color: #e2e3e5; color: #383d41; margin-right: auto; border-bottom-left-radius: 0; }
+        #input-area { display: flex; gap: 10px; }
+        #user-input { flex-grow: 1; }
+        #chat-loader { display: none; margin-left: 10px; }
+    </style>
+{% endblock %}
+
+{% block content %}
+    {# --- 返回按鈕 --- #}
+    <div class="mb-3">
+      <a href="{{ url_for('index') }}" title="返回主選單" class="btn btn-outline-secondary btn-sm border-0 text-muted">
+        <i class="bi bi-arrow-left-circle fs-5"></i>
+      </a>
+    </div>
+    {# --- 返回按鈕結束 --- #}
+
+    {# +++ 修改標題和說明 +++ #}
+    <h1 class="mb-4"><i class="bi bi-chat-dots me-2"></i> 自由對話</h1>
+    <p class="text-muted mb-3">與 AI 自由對話吧！</p>
+
+    {# --- 聊天訊息顯示區域 --- #}
+    <div id="chatbox">
+         {# +++ 修改初始訊息 +++ #}
+        <div class="message ai-message">你好！今天想聊些什麼？</div>
+        </div>
+
+    {# --- 使用者輸入區域 (保持不變) --- #}
+    <div id="input-area">
+        <input type="text" id="user-input" class="form-control" placeholder="請在這裡輸入訊息...">
+        <button id="send-button" class="btn btn-custom-gradient btn-grad-4"> {#<-- 使用按鈕4的顏色 #}
+            <i class="bi bi-send"></i> 傳送
+        </button>
+        <div class="spinner-border text-primary" role="status" id="chat-loader">
+            <span class="visually-hidden">處理中...</span>
+        </div>
+    </div>
+
+{% endblock %}
+
+{% block scripts %}
+    {{ super() }}
+    {# --- JavaScript 保持不變 --- #}
+    <script>
+        const chatbox = document.getElementById('chatbox');
+        const userInput = document.getElementById('user-input');
+        const sendButton = document.getElementById('send-button');
+        const loader = document.getElementById('chat-loader');
+        function addMessage(message, sender) { /* ... (同上一個版本) ... */
+            const messageDiv = document.createElement('div'); messageDiv.classList.add('message', sender === 'user' ? 'user-message' : 'ai-message');
+            messageDiv.innerHTML = message.replace(/\n/g, '<br>'); chatbox.appendChild(messageDiv); chatbox.scrollTop = chatbox.scrollHeight;
+        }
+        async function sendMessage() { /* ... (同上一個版本) ... */
+            const message = userInput.value.trim(); if (!message) return;
+            addMessage(message, 'user'); userInput.value = ''; sendButton.disabled = true; loader.style.display = 'inline-block';
+            try {
+                const response = await fetch("{{ url_for('api_chat') }}", { method: 'POST', headers: { 'Content-Type': 'application/json', }, body: JSON.stringify({ message: message }) });
+                if (response.ok) { const result = await response.json(); if (result.reply) { addMessage(result.reply, 'ai'); } else { addMessage('抱歉，AI 沒有提供回覆。', 'ai'); } }
+                else { const errorText = await response.text(); console.error("Chat API Error:", response.status, errorText); addMessage(`抱歉，發生錯誤 (${response.status})，無法取得回覆。`, 'ai'); }
+            } catch (error) { console.error("Network error:", error); addMessage('抱歉，網路連線錯誤，請稍後再試。', 'ai'); }
+            finally { sendButton.disabled = false; loader.style.display = 'none'; userInput.focus(); }
+        }
+        if (sendButton && userInput && chatbox && loader) { sendButton.addEventListener('click', sendMessage); userInput.addEventListener('keypress', function(event) { if (event.key === 'Enter') { sendMessage(); } }); }
+        else { console.error("找不到聊天介面的必要元素。"); }
+    </script>
+{% endblock %}
