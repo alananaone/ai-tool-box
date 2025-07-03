@@ -1,1 +1,15 @@
+# 忽略 Python 快取資料夾
+__pycache__/
+
+# 忽略輸出的結果資料夾
+outputs/
+
+# 忽略上傳的檔案資料夾
+uploads/
+
+# 忽略所有 .log 結尾的日誌檔案
+*.log
+
+howgit.txt
+
 config.ini
