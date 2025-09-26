@@ -49,6 +49,9 @@
              <a href="{{ url_for('summarize') }}" class="btn btn-lg btn-custom-gradient btn-grad-3">
                   <i class="bi bi-card-checklist"></i>重點整理
              </a>
+             <a href="{{ url_for('text_to_ppt') }}" class="btn btn-lg btn-custom-gradient btn-grad-6">
+                <i class="bi bi-file-earmark-text"></i>文字檔生成簡報
+             </a>
              <a href="{{ url_for('chat') }}" class="btn btn-lg btn-custom-gradient btn-grad-4">
                   <i class="bi bi-chat-dots"></i>自由對話
              </a>
@@ -58,7 +61,6 @@
         </div>
     </div>
 
-    <!-- 音樂播放器 HTML -->
     <div class="music-player-container-modern col-lg-6 col-md-8 mx-auto text-center">
         <div id="song-title-modern">歌曲名稱</div>
         <input type="range" id="progress-bar" class="form-range" value="0" step="1">

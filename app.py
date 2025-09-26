@@ -55,6 +55,9 @@ OUTPUT_FOLDER = os.path.join(BASE_PATH, 'outputs')
 ALLOWED_EXTENSIONS_PDF = {'pdf'}
 ALLOWED_EXTENSIONS_OCR = {'pdf', 'png', 'jpg', 'jpeg', 'bmp', 'gif', 'webp'}
 ALLOWED_EXTENSIONS_FULL_REPORT = {'pdf'}
+# +++ 新增：允許的文字檔案類型 +++
+ALLOWED_EXTENSIONS_TEXT = {'docx', 'txt'}
+
 
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "a_very_secret_key_that_should_be_changed")
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
@@ -103,6 +106,9 @@ def task_worker():
                 run_summarize_workflow(progress_queue, task_id, api_key, task_info)
             elif task_type == 'file_split':
                 run_split_workflow(progress_queue, task_id, api_key, task_info)
+            # +++ 新增：處理新的任務類型 +++
+            elif task_type == 'text_to_ppt':
+                run_text_to_ppt_workflow(progress_queue, task_id, api_key, task_info)
             else:
                 logging.warning(f"[背景工作者] 未知的任務類型: {task_type} (ID: {task_id})")
                 progress_queue.put(json.dumps({'type': 'error', 'message': f'未知的任務類型: {task_type}'}))
@@ -156,6 +162,63 @@ def read_text_from_file(filepath):
 # ==============================================================================
 #                                工作流程函式
 # ==============================================================================
+
+# +++ 新增：處理文字檔到簡報的工作流程 +++
+def run_text_to_ppt_workflow(progress_queue, task_id, api_key, task_info):
+    """從文字檔 (docx, txt) 開始，執行 摘要 -> 簡報 的流程。"""
+    logging.info(f"[工作流程 {task_id} - 文字檔->PPT] 開始...")
+    original_fn = task_info['original_base_filename_preserved']
+    uploaded_file = task_info['uploaded_file_path']
+    task_folder = task_info['task_output_folder']
+    
+    summary_subfolder = "sum"
+    ppt_subfolder = "ppt"
+    
+    summary_word_path = os.path.join(task_folder, "summary.docx")
+    temp_ppt_path = os.path.join(task_folder, "ppt.pptx")
+    
+    overall_success = False
+    output_path = None
+    
+    try:
+        # 步驟 1: 讀取檔案內容
+        progress_queue.put(json.dumps({'type': 'status', 'step': 1, 'status': '讀取檔案內容...', 'percent': 10}))
+        document_text = read_text_from_file(uploaded_file)
+        if not document_text.strip():
+            raise ValueError("上傳的檔案內容為空或無法讀取。")
+
+        # 步驟 2: 生成摘要
+        progress_queue.put(json.dumps({'type': 'status', 'step': 2, 'status': '生成摘要...', 'percent': 25}))
+        if not run_summarization(api_key, MODEL_CONFIG['SUMMARIZE'], document_text, summary_word_path, progress_queue):
+            raise Exception("步驟 2 (生成摘要) 失敗")
+        copy_to_desktop_folder(summary_word_path, summary_subfolder, f"sum_{original_fn}.docx")
+
+        # 步驟 3: 生成簡報
+        progress_queue.put(json.dumps({'type': 'status', 'step': 3, 'status': '生成簡報...', 'percent': 80}))
+        if not run_conversion_to_ppt(summary_word_path, temp_ppt_path):
+            raise Exception("步驟 3 (轉換為簡報) 失敗")
+
+        final_path, final_ppt_name = copy_to_desktop_folder(temp_ppt_path, ppt_subfolder, f"ppt_{original_fn}.pptx")
+        if not final_path:
+            raise Exception("儲存最終簡報到桌面失敗")
+        
+        output_path = os.path.dirname(os.path.dirname(final_path))
+        progress_queue.put(json.dumps({
+            'type': 'complete', 
+            'message': f'簡報 "{final_ppt_name}" 及摘要檔案已分類儲存。',
+            'folder_path': output_path
+        }))
+        overall_success = True
+
+    except Exception as e:
+        logging.error(f"[工作流程 {task_id} - 文字檔->PPT] 失敗: {e}", exc_info=True)
+        progress_queue.put(json.dumps({'type': 'error', 'message': f'處理失敗: {e}'}))
+    finally:
+        if os.path.exists(task_folder):
+            shutil.rmtree(task_folder, ignore_errors=True)
+        if not overall_success:
+            progress_queue.put(json.dumps({'type': 'done'}))
+
 
 def run_full_report_workflow(progress_queue, task_id, api_key, task_info):
     """執行 PDF -> 原文 -> 翻譯 -> 摘要 -> 簡報 的完整流程，並將4個檔案分類儲存。"""
@@ -455,6 +518,23 @@ def summarize():
     }
     return render_template('process_page.html', **page_context)
 
+# +++ 新增：文字檔到簡報的路由 +++
+@app.route('/text_to_ppt')
+def text_to_ppt():
+    page_context = {
+        "title": "文字檔生成簡報",
+        "icon": "bi-file-earmark-text",
+        "description": "上傳 Word (.docx) 或純文字檔 (.txt)，系統將直接為其生成結構化摘要與 PowerPoint 簡報。",
+        "form_action_url": url_for('process_task'),
+        "allowed_extensions": ".docx, .txt",
+        "task_type": "text_to_ppt",
+        "button_text": "開始生成",
+        "button_color_class": "btn-grad-6", # 使用一個新的顏色
+        "output_folder_name": "AI 工具輸出"
+    }
+    return render_template('process_page.html', **page_context)
+
+
 @app.route('/file_split')
 def file_split():
     page_context = {
@@ -478,12 +558,14 @@ def process_task():
     file = request.files['source_file']
     if file.filename == '': return jsonify({'success': False, 'error': '沒有選擇檔案'}), 400
     
+    # +++ 更新：加入新的任務類型和允許的副檔名 +++
     allowed_ext_map = {
         'pdf_to_ppt': ALLOWED_EXTENSIONS_PDF,
         'full_report': ALLOWED_EXTENSIONS_FULL_REPORT,
         'ocr': ALLOWED_EXTENSIONS_OCR,
-        'summarize': ALLOWED_EXTENSIONS_PDF, # Summarize only supports PDF
-        'file_split': ALLOWED_EXTENSIONS_PDF, # Split only supports PDF
+        'summarize': ALLOWED_EXTENSIONS_PDF,
+        'file_split': ALLOWED_EXTENSIONS_PDF,
+        'text_to_ppt': ALLOWED_EXTENSIONS_TEXT,
     }
     allowed_exts = allowed_ext_map.get(task_type)
     
